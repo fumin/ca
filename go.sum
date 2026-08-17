@@ -1,0 +1,6 @@
+github.com/fumin/nag v0.0.0-20260101070327-0a71033f738c h1:t8cITYdi0Yn0gN81+Fq28TCgAl+cXBRgFkeog/pKNxk=
+github.com/fumin/nag v0.0.0-20260101070327-0a71033f738c/go.mod h1:oTfLGDCNl7xl4Nbtg6eSqFz1jrONXDc3if6+tyBg+x0=
+github.com/jba/omap v0.7.0 h1:r79Nc63BhDERhCoGa6Nz7r7xTbQxyyCjOIZDB2UKLv4=
+github.com/jba/omap v0.7.0/go.mod h1:owYEiKYbAGyWNgDCq8NmieDKOBCbgfxCYGVyDZnnOE4=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
