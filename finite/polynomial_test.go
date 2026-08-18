@@ -2,6 +2,7 @@ package finite
 
 import (
 	"fmt"
+	"math/big"
 	"slices"
 	"testing"
 
@@ -11,41 +12,49 @@ import (
 
 func TestFactorize(t *testing.T) {
 	tests := []struct {
-		order  int
+		order  *big.Int
 		a      string
 		factor []factorStr
 	}{
 		{
-			order: 2,
+			order: big.NewInt(2),
 			a:     "x^2+x",
 			factor: []factorStr{
-				{a: "x", n: 1},
-				{a: "x+1", n: 1},
+				{a: "x", n: big.NewInt(1)},
+				{a: "x+1", n: big.NewInt(1)},
 			},
 		},
 		{
-			order: 2,
+			order: big.NewInt(2),
 			a:     "x^2+1",
 			factor: []factorStr{
-				{a: "x+1", n: 2},
+				{a: "x+1", n: big.NewInt(2)},
 			},
 		},
 		{
-			order: 2,
+			order: big.NewInt(2),
 			a:     "x^2+x+1",
 			factor: []factorStr{
-				{a: "x^2+x+1", n: 1},
+				{a: "x^2+x+1", n: big.NewInt(1)},
 			},
 		},
 		{
-			order: 7,
+			order: big.NewInt(7),
 			a:     "(x+2)^6(x+5)^6(x^5+x+4)^6(x^2+x+3)^4(x^2+2x+5)^4",
 			factor: []factorStr{
-				{a: "x+2", n: 6},
-				{a: "x+5", n: 6},
-				{a: "x^2+x+3", n: 4},
-				{a: "x^2+2x+5", n: 4},
-				{a: "x^5+x+4", n: 6},
+				{a: "x+2", n: big.NewInt(6)},
+				{a: "x+5", n: big.NewInt(6)},
+				{a: "x^2+x+3", n: big.NewInt(4)},
+				{a: "x^2+2x+5", n: big.NewInt(4)},
+				{a: "x^5+x+4", n: big.NewInt(6)},
+			},
+		},
+		{
+			order: int10("21888242871839275222246405745257275088548364400416034343698204186575808495617"),
+			a:     "x^2+2x-8",
+			factor: []factorStr{
+				{a: "x-2", n: big.NewInt(1)},
+				{a: "x+4", n: big.NewInt(1)},
 			},
 		},
 	}
@@ -66,7 +75,7 @@ func TestFactorize(t *testing.T) {
 			}
 			for i, f := range factors {
 				tf := tFactors[i]
-				if !(f.A.Equal(tf.A) && f.N == tf.N) {
+				if !(f.A.Equal(tf.A) && f.N.Cmp(tf.N) == 0) {
 					t.Errorf("%d got %v want %v", i, f, tf)
 				}
 			}
@@ -76,23 +85,23 @@ func TestFactorize(t *testing.T) {
 
 func TestEqualDegree(t *testing.T) {
 	tests := []struct {
-		order  int
+		order  *big.Int
 		a      factorStr
 		factor []string
 	}{
 		{
-			order:  2,
-			a:      factorStr{a: "x(x+1)", n: 1},
+			order:  big.NewInt(2),
+			a:      factorStr{a: "x(x+1)", n: big.NewInt(1)},
 			factor: []string{"x", "x+1"},
 		},
 		{
-			order:  3,
-			a:      factorStr{a: "x(x+2)", n: 1},
+			order:  big.NewInt(3),
+			a:      factorStr{a: "x(x+2)", n: big.NewInt(1)},
 			factor: []string{"x", "x+2"},
 		},
 		{
-			order:  2,
-			a:      factorStr{a: "(x^5+x^2+1)(x^5+x^3+1)(x^5+x^4+x^2+x+1)", n: 5},
+			order:  big.NewInt(2),
+			a:      factorStr{a: "(x^5+x^2+1)(x^5+x^3+1)(x^5+x^4+x^2+x+1)", n: big.NewInt(5)},
 			factor: []string{"x^5+x^2+1", "x^5+x^3+1", "x^5+x^4+x^2+x+1"},
 		},
 	}
@@ -122,16 +131,16 @@ func TestEqualDegree(t *testing.T) {
 
 func TestDistinctDegree(t *testing.T) {
 	tests := []struct {
-		order  int
+		order  *big.Int
 		a      string
 		factor []factorStr
 	}{
 		{
-			order: 3,
+			order: big.NewInt(3),
 			a:     "x(x+2)(x^2+x+2)",
 			factor: []factorStr{
-				{a: "x(x+2)", n: 1},
-				{a: "x^2+x+2", n: 2},
+				{a: "x(x+2)", n: big.NewInt(1)},
+				{a: "x^2+x+2", n: big.NewInt(2)},
 			},
 		},
 	}
@@ -151,7 +160,7 @@ func TestDistinctDegree(t *testing.T) {
 			}
 			for i, f := range factors {
 				tf := tfactors[i]
-				if !(f.A.Equal(tf.A) && f.N == tf.N) {
+				if !(f.A.Equal(tf.A) && f.N.Cmp(tf.N) == 0) {
 					t.Errorf("got %v want %v", f, tf)
 				}
 			}
@@ -161,37 +170,37 @@ func TestDistinctDegree(t *testing.T) {
 
 func TestSquareFree(t *testing.T) {
 	tests := []struct {
-		order  int
+		order  *big.Int
 		a      string
 		factor []factorStr
 	}{
 		{
-			order: 3,
+			order: big.NewInt(3),
 			a:     "x^11+2x^9+2x^8+x^6+x^5+2x^3+2x^2+1",
 			factor: []factorStr{
-				{a: "x+1", n: 1},
-				{a: "x+2", n: 4},
-				{a: "x^2+1", n: 3},
+				{a: "x+1", n: big.NewInt(1)},
+				{a: "x+2", n: big.NewInt(4)},
+				{a: "x^2+1", n: big.NewInt(3)},
 			},
 		},
 		{
-			order:  5,
+			order:  big.NewInt(5),
 			a:      "x^6+x^4+x^3-x^2-2x-1",
-			factor: []factorStr{{a: "x^3+3x+3", n: 2}},
+			factor: []factorStr{{a: "x^3+3x+3", n: big.NewInt(2)}},
 		},
 		{
-			order: 13,
+			order: big.NewInt(13),
 			a:     "x^7+3x^6+5x^5+7x^4+7x^3+5x^2+3x+1",
 			factor: []factorStr{
-				{a: "x^2+1", n: 2},
-				{a: "x+1", n: 3},
+				{a: "x^2+1", n: big.NewInt(2)},
+				{a: "x+1", n: big.NewInt(3)},
 			},
 		},
 		{
-			order: 7,
+			order: big.NewInt(7),
 			a:     "(x+2)^6(x+5)^6",
 			factor: []factorStr{
-				{a: "x^2+3", n: 6},
+				{a: "x^2+3", n: big.NewInt(6)},
 			},
 		},
 	}
@@ -211,7 +220,7 @@ func TestSquareFree(t *testing.T) {
 			}
 			for i, f := range factors {
 				tf := testFactors[i]
-				if !(f.A.Equal(tf.A) && f.N == tf.N) {
+				if !(f.A.Equal(tf.A) && f.N.Cmp(tf.N) == 0) {
 					t.Errorf("%d got %v want %v", i, f, tf)
 				}
 			}
@@ -219,7 +228,7 @@ func TestSquareFree(t *testing.T) {
 			af := ca.NewPolynomial(a.Field(), a.Order(), ca.PolynomialTerm[*prime]{Coefficient: a.Field().NewOne()})
 			buf := ca.NewPolynomial(a.Field(), a.Order())
 			for _, f := range factors {
-				for range f.N {
+				for range int(f.N.Int64()) {
 					af.Set(buf.Mul(af, f.A))
 				}
 			}
@@ -236,8 +245,8 @@ func TestDifferentiate(t *testing.T) {
 		aP *ca.Polynomial[*prime]
 	}{
 		{
-			a:  parseMust(13, "3x^7+8x^5-2x^2+5"),
-			aP: parseMust(13, "-5x^6+x^4-4x"),
+			a:  parseMust(big.NewInt(13), "3x^7+8x^5-2x^2+5"),
+			aP: parseMust(big.NewInt(13), "-5x^6+x^4-4x"),
 		},
 	}
 
@@ -254,13 +263,13 @@ func TestDifferentiate(t *testing.T) {
 
 func TestInverse(t *testing.T) {
 	tests := []struct {
-		order int
+		order *big.Int
 		a     string
 		p     string
 		inv   string
 	}{
 		{
-			order: 2,
+			order: big.NewInt(2),
 			a:     "x^6+x^4+x+1",
 			p:     "x^8+x^4+x^3+x+1",
 			inv:   "x^7+x^6+x^3+x",
@@ -283,7 +292,7 @@ func TestInverse(t *testing.T) {
 
 func TestGcd(t *testing.T) {
 	tests := []struct {
-		order int
+		order *big.Int
 		a     string
 		b     string
 		g     string
@@ -293,7 +302,7 @@ func TestGcd(t *testing.T) {
 		b1    string
 	}{
 		{
-			order: 101,
+			order: big.NewInt(101),
 			a:     "x^2+7x+6",
 			b:     "x^2-5x-6",
 			g:     "x+1",
@@ -345,37 +354,101 @@ func TestGcd(t *testing.T) {
 	}
 }
 
-func TestIthPoly(t *testing.T) {
+func TestNewPolynomialMod(t *testing.T) {
 	tests := []struct {
-		ith  int
-		base int
-		poly string
+		order int64
+		mod   string
+		p     string
+		e     string
 	}{
-		{
-			ith:  3,
-			base: 2,
-			poly: "x+1",
-		},
+		{order: 2, mod: "x^2+x+1", p: "x^4+x^3+1", e: "x"},
+		{order: 3, mod: "x^3+2x+1", p: "(x^2+x+2)(2x^2+1)", e: "x^2+x"},
 	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			mod := parseMust(big.NewInt(test.order), test.mod)
+			p := parseMust(big.NewInt(test.order), test.p)
+			e := parseMust(big.NewInt(test.order), test.e)
 
-	for testI, test := range tests {
-		t.Run(fmt.Sprintf("%d", testI), func(t *testing.T) {
-			t.Parallel()
-			tpoly := parseMust(test.base, test.poly)
-			poly := ithPoly(poly0(tpoly), test.ith, test.base)
-			if !poly.Equal(tpoly) {
-				t.Errorf("%v %v", poly, tpoly)
+			z := newPolynomialMod(p, mod)
+			if !z.mod.Equal(mod) {
+				t.Errorf("%v", z.mod)
+			}
+			if !z.p.Equal(e) {
+				t.Errorf("%v", z.p)
 			}
 		})
 	}
 }
 
-type factorStr struct {
-	a string
-	n int
+func TestMul(t *testing.T) {
+	tests := []struct {
+		order int64
+		mod   string
+		x     string
+		y     string
+		mul   string
+	}{
+		{order: 2, mod: "x^2+x+1", x: "x", y: "0", mul: "0"},
+		{order: 2, mod: "x^2+x+1", x: "x", y: "x", mul: "x+1"},
+		{order: 2, mod: "x^2+x+1", x: "x", y: "x+1", mul: "1"},
+		{order: 3, mod: "x^3+2x+1", x: "x^2+x+2", y: "2x^2+1", mul: "x^2+x"},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			mod := parseMust(big.NewInt(test.order), test.mod)
+			x := newPolynomialMod(parseMust(big.NewInt(test.order), test.x), mod)
+			y := newPolynomialMod(parseMust(big.NewInt(test.order), test.y), mod)
+			mul := newPolynomialMod(parseMust(big.NewInt(test.order), test.mul), mod)
+
+			if z := x.NewOne().Mul(x, y); !z.Equal(mul) {
+				t.Errorf("%v", z)
+			}
+			// Check multiply by one is a no-op.
+			if z1 := x.NewOne().Mul(mul, x.NewOne()); !z1.Equal(mul) {
+				t.Errorf("%v", z1)
+			}
+		})
+	}
 }
 
-func parse(order int, s string) (*ca.Polynomial[*prime], error) {
+func TestInv(t *testing.T) {
+	tests := []struct {
+		order int64
+		mod   string
+		x     string
+		inv   string
+	}{
+		{order: 3, mod: "x^3+2x+1", x: "x^2+1", inv: "2x^2+x+2"},
+		{order: 5, mod: "x^3+3x+2", x: "x+2", inv: "-2x^2-x+1"},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			mod := parseMust(big.NewInt(test.order), test.mod)
+			x := newPolynomialMod(parseMust(big.NewInt(test.order), test.x), mod)
+			inv := newPolynomialMod(parseMust(big.NewInt(test.order), test.inv), mod)
+
+			if z := x.NewOne().Inv(x); !z.Equal(inv) {
+				t.Errorf("%v", z)
+			}
+		})
+	}
+}
+
+func int10(s string) *big.Int {
+	i, ok := new(big.Int).SetString(s, 10)
+	if !ok {
+		panic("SetString error")
+	}
+	return i
+}
+
+type factorStr struct {
+	a string
+	n *big.Int
+}
+
+func parse(order *big.Int, s string) (*ca.Polynomial[*prime], error) {
 	variables := map[string]ca.Symbol{"x": 0}
 	rp, err := ca.Parse(variables, ca.Deglex, s)
 	if err != nil {
@@ -383,17 +456,19 @@ func parse(order int, s string) (*ca.Polynomial[*prime], error) {
 	}
 
 	// Cast coefficients from rationals to GF(order).
-	field := newPrime(order, 0)
+	field := &prime{order: new(big.Int).Set(order), i: big.NewInt(0)}
 	p := ca.NewPolynomial[*prime](field, rp.Order())
 	p.SymbolStringer = rp.SymbolStringer
 	for rc, w := range rp.Terms() {
-		c := newPrime(order, int(rc.Num().Int64()))
+		cNum := &prime{order: new(big.Int).Set(order), i: rc.Num()}
+		cDenom := &prime{order: new(big.Int).Set(order), i: rc.Denom()}
+		c := newPrime(0, 1).Div(cNum, cDenom)
 		p.Add(p, ca.NewPolynomial(p.Field(), p.Order(), ca.PolynomialTerm[*prime]{Coefficient: c, Monomial: w}))
 	}
 	return p, nil
 }
 
-func parseMust(order int, s string) *ca.Polynomial[*prime] {
+func parseMust(order *big.Int, s string) *ca.Polynomial[*prime] {
 	p, err := parse(order, s)
 	if err != nil {
 		panic(err)

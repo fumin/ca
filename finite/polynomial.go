@@ -2,8 +2,9 @@ package finite
 
 import (
 	"cmp"
+	"crypto/rand"
+	"fmt"
 	"math/big"
-	"math/rand"
 	"slices"
 
 	"github.com/fumin/ca"
@@ -13,14 +14,16 @@ import (
 type finite[K ca.Field[K]] interface {
 	ca.Field[K]
 	// characteristic returns p in the finite field GF(p^n).
-	characteristic() int
+	characteristic() *big.Int
 	// primePower returns n in the finite field GF(p^n).
-	primePower() int
+	primePower() *big.Int
+	// ith returns the i'th element in the field.
+	ith(i *big.Int) K
 }
 
 type factor[K finite[K]] struct {
 	A *ca.Polynomial[K]
-	N int
+	N *big.Int
 }
 
 func factorize[K finite[K]](f *ca.Polynomial[K]) []factor[K] {
@@ -38,23 +41,22 @@ func factorize[K finite[K]](f *ca.Polynomial[K]) []factor[K] {
 	return factors
 }
 
-func equalDegree[K finite[K]](f *ca.Polynomial[K], d int) []*ca.Polynomial[K] {
-	n := int(f.LeadingTerm().Monomial[0].Int64())
-	r := n / d
+// Factoring Polynomials Over Finite Fields: A Survey, Joachim von zur Gathen, Daniel Panario.
+func equalDegree[K finite[K]](f *ca.Polynomial[K], d *big.Int) []*ca.Polynomial[K] {
+	n := f.LeadingTerm().Monomial[0]
+	r := big.NewInt(0).Div(n, d)
 	k := f.Field()
 	// q is the order of the field k.
-	q := expi(k.characteristic(), k.primePower())
-	// numFq is the number of GF(q) polynomials with degree less than n.
-	numFq := expi(q, n)
+	q := pow(ca.NewRat(0, 1).SetFrac(k.characteristic(), big.NewInt(1)), k.primePower()).Num()
 
 	factors := []*ca.Polynomial[K]{f}
-	for len(factors) < r {
-		hi := rand.Intn(numFq-q) + q
-		h := ithPoly(poly0(f), hi, q)
+	for uint64(len(factors)) < r.Uint64() {
+		h := randPoly(poly0(f), n)
 		g, _, _, _, _ := gcd(h, f)
 		if isOne(g) {
-			qd := (expi(q, d) - 1) / 2
-			hqd := sub(pow(h, qd), poly1(h))
+			qd := pow(ca.NewRat(0, 1).SetFrac(q, big.NewInt(1)), d).Num()
+			qdExp := new(big.Int).Div(new(big.Int).Sub(qd, big.NewInt(1)), big.NewInt(2))
+			hqd := sub(pow(newPolynomialMod(h, f), qdExp).p, poly1(h))
 			_, g = divide(hqd, f)
 		}
 
@@ -66,7 +68,7 @@ func equalDegree[K finite[K]](f *ca.Polynomial[K], d int) []*ca.Polynomial[K] {
 				if _, ok := checked[f.String()]; ok {
 					continue
 				}
-				if int(f.LeadingTerm().Monomial[0].Int64()) > d {
+				if deg(f).Cmp(d) > 0 {
 					ui = i
 					break
 				}
@@ -91,32 +93,31 @@ func equalDegree[K finite[K]](f *ca.Polynomial[K], d int) []*ca.Polynomial[K] {
 }
 
 func distinctDegree[K finite[K]](f *ca.Polynomial[K]) []factor[K] {
-	degF := int(f.LeadingTerm().Monomial[0].Int64())
 	k := f.Field()
 	// q is the order of the field k.
-	q := expi(k.characteristic(), k.primePower())
+	q := pow(ca.NewRat(0, 1).SetFrac(k.characteristic(), big.NewInt(1)), k.primePower()).Num()
 	neg1 := k.NewZero()
 	neg1.Sub(k.NewZero(), k.NewOne())
 
 	fs := poly0(f).Set(f)
 	s := make([]factor[K], 0)
-	for i := 1; i <= degF/2+1; i++ {
-		qi := expi(q, i)
-		xqi := ca.NewPolynomial(k, fs.Order(),
-			ca.PolynomialTerm[K]{Coefficient: k.NewOne(), Monomial: ca.Monomial{big.NewInt(int64(qi))}},
-			ca.PolynomialTerm[K]{Coefficient: neg1, Monomial: ca.Monomial{big.NewInt(1)}})
-		_, xqi = divide(xqi, fs)
+	for i := big.NewInt(1); deg(fs).Cmp(new(big.Int).Mul(big.NewInt(2), i)) >= 0; i = new(big.Int).Add(i, big.NewInt(1)) {
+		qi := pow(ca.NewRat(0, 1).SetFrac(q, big.NewInt(1)), i).Num()
+		x := newPolynomialMod(ca.NewPolynomial(k, fs.Order(), ca.PolynomialTerm[K]{Coefficient: k.NewOne(), Monomial: ca.Monomial{big.NewInt(1)}}), fs)
+		xqi := pow(x, qi).p
+		xqi.Add(xqi, ca.NewPolynomial(k, fs.Order(), ca.PolynomialTerm[K]{Coefficient: neg1, Monomial: ca.Monomial{big.NewInt(1)}}))
+
 		g, _, _, _, _ := gcd(fs, xqi)
 		if !isOne(g) {
-			s = append(s, factor[K]{A: g, N: i})
+			s = append(s, factor[K]{A: g, N: new(big.Int).Set(i)})
 			fs, _ = divide(fs, g)
 		}
 	}
 	if !isOne(fs) {
-		s = append(s, factor[K]{A: fs, N: degF})
+		s = append(s, factor[K]{A: fs, N: deg(fs)})
 	}
 	if len(s) == 0 {
-		s = append(s, factor[K]{A: f, N: 1})
+		s = append(s, factor[K]{A: f, N: big.NewInt(1)})
 	}
 	return s
 }
@@ -126,16 +127,16 @@ func squareFree[K finite[K]](f *ca.Polynomial[K]) []factor[K] {
 	w, _ := divide(f, c)
 
 	r := make([]factor[K], 0)
-	var i int = 1
+	i := big.NewInt(1)
 	for !isOne(w) {
 		y, _, _, _, _ := gcd(w, c)
 		fac, _ := divide(w, y)
 		if !isOne(fac) {
-			r = append(r, factor[K]{A: fac, N: i})
+			r = append(r, factor[K]{A: fac, N: new(big.Int).Set(i)})
 		}
 		w = y
 		c, _ = divide(c, y)
-		i++
+		i.Add(i, big.NewInt(1))
 	}
 
 	if !isOne(c) {
@@ -148,12 +149,13 @@ func squareFree[K finite[K]](f *ca.Polynomial[K]) []factor[K] {
 			// x^{ap} -> x^a
 			w := make(ca.Monomial, len(cw))
 			for i := range w {
-				w[i] = big.NewInt(0).Div(cw[i], big.NewInt(int64(p)))
+				w[i] = big.NewInt(0).Div(cw[i], p)
 			}
 
 			// c -> c^{p^(e-1)}
-			pe1 := expi(p, e-1)
-			rc := exp(cc, pe1)
+			e1 := new(big.Int).Sub(e, big.NewInt(1))
+			pe1 := pow(ca.NewRat(0, 1).SetFrac(p, big.NewInt(1)), e1).Num()
+			rc := pow(cc, pe1)
 
 			cRoot.Add(cRoot, ca.NewPolynomial(k, c.Order(), ca.PolynomialTerm[K]{Coefficient: rc, Monomial: w}))
 		}
@@ -161,7 +163,7 @@ func squareFree[K finite[K]](f *ca.Polynomial[K]) []factor[K] {
 		// Do factorization on c^{1/p}.
 		sf := squareFree(cRoot)
 		for i := range sf {
-			sf[i].N *= p
+			sf[i].N.Mul(sf[i].N, p)
 		}
 		r = append(r, sf...)
 	}
@@ -181,7 +183,7 @@ func differentiate[K ca.Field[K]](a *ca.Polynomial[K]) *ca.Polynomial[K] {
 		}
 
 		c := k.NewZero()
-		for exp := big.NewInt(0); exp.Cmp(aw[0]) < 0; exp.Add(exp, big.NewInt(1)) {
+		for i := big.NewInt(0); i.Cmp(aw[0]) < 0; i.Add(i, big.NewInt(1)) {
 			c.Add(c, ac)
 		}
 
@@ -198,6 +200,10 @@ func inverse[K ca.Field[K]](a, p *ca.Polynomial[K]) *ca.Polynomial[K] {
 	return v
 }
 
+// gcd returns the greatest common divisor of a and b.
+// gcd(a, b) = g = u*a + v*b
+// a = a1*g
+// b = b1*g
 func gcd[K ca.Field[K]](a, b *ca.Polynomial[K]) (g, u, v, a1, b1 *ca.Polynomial[K]) {
 	r0, r1 := a, b
 	s0, s1 := poly1(a), poly0(a)
@@ -256,22 +262,31 @@ func divide[K ca.Field[K]](a, b *ca.Polynomial[K]) (*ca.Polynomial[K], *ca.Polyn
 	return q, r
 }
 
-func ithPoly[K ca.Field[K]](poly *ca.Polynomial[K], ith, base int) *ca.Polynomial[K] {
+func randPoly[K finite[K]](poly *ca.Polynomial[K], n *big.Int) *ca.Polynomial[K] {
 	k := poly.Field()
-	var pow int = -1
-	for ith != 0 {
-		pow++
-		var r int
-		ith, r = ith/base, ith%base
+	// q is the order of the field k.
+	q := pow(ca.NewRat(0, 1).SetFrac(k.characteristic(), big.NewInt(1)), k.primePower()).Num()
 
-		c := k.NewZero()
-		for range r {
-			c.Add(c, k.NewOne())
+	for i := big.NewInt(0); i.Cmp(n) < 0; i.Add(i, big.NewInt(1)) {
+		cint, _ := rand.Int(rand.Reader, q)
+		if cint.Cmp(big.NewInt(0)) == 0 {
+			continue
 		}
-		w := ca.Monomial{big.NewInt(int64(pow))}
+
+		c := k.ith(cint)
+		w := ca.Monomial{new(big.Int).Set(i)}
 		poly.Add(poly, ca.NewPolynomial(k, poly.Order(), ca.PolynomialTerm[K]{Coefficient: c, Monomial: w}))
 	}
+
 	return poly
+}
+
+func deg[K ca.Field[K]](a *ca.Polynomial[K]) *big.Int {
+	w := a.LeadingTerm().Monomial
+	if len(w) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).Set(w[0])
 }
 
 func isOne[K ca.Field[K]](a *ca.Polynomial[K]) bool {
@@ -286,14 +301,6 @@ func isOne[K ca.Field[K]](a *ca.Polynomial[K]) bool {
 		return false
 	}
 	return true
-}
-
-func pow[K ca.Field[K]](a *ca.Polynomial[K], n int) *ca.Polynomial[K] {
-	y := poly1(a)
-	for range n {
-		y = mul(y, a)
-	}
-	return y
 }
 
 func sub[K ca.Field[K]](x, y *ca.Polynomial[K]) *ca.Polynomial[K] {
@@ -320,20 +327,60 @@ func mul[K ca.Field[K]](x *ca.Polynomial[K], y ...*ca.Polynomial[K]) *ca.Polynom
 	return z
 }
 
-func expi(x, n int) int {
-	return int(exp(ca.NewRat(int64(x), 1), n).Num().Int64())
+type polynomialMod[K ca.Field[K]] struct {
+	p   *ca.Polynomial[K]
+	mod *ca.Polynomial[K]
 }
 
-func exp[K ca.Field[K]](x K, n int) K {
+func newPolynomialMod[K ca.Field[K]](p, mod *ca.Polynomial[K]) *polynomialMod[K] {
+	z := &polynomialMod[K]{p: ca.NewPolynomial(p.Field(), p.Order()).Set(p), mod: ca.NewPolynomial(mod.Field(), mod.Order()).Set(mod)}
+	_, z.p = ca.Divide(nil, z.p, []*ca.Polynomial[K]{z.mod})
+	return z
+}
+
+func (x *polynomialMod[K]) NewOne() *polynomialMod[K] {
+	z := &polynomialMod[K]{p: ca.NewPolynomial(x.p.Field(), x.p.Order(), ca.PolynomialTerm[K]{Coefficient: x.p.Field().NewOne()}), mod: ca.NewPolynomial(x.mod.Field(), x.mod.Order()).Set(x.mod)}
+	z.p.SymbolStringer = x.p.SymbolStringer
+	return z
+}
+
+func (z *polynomialMod[K]) Equal(x *polynomialMod[K]) bool {
+	return z.p.Equal(x.p) && z.mod.Equal(x.mod)
+}
+
+func (z *polynomialMod[K]) Mul(x, y *polynomialMod[K]) *polynomialMod[K] {
+	z.p.Mul(x.p, y.p)
+	z.mod.Set(x.mod)
+	_, z.p = ca.Divide(nil, z.p, []*ca.Polynomial[K]{z.mod})
+	return z
+}
+
+func (z *polynomialMod[K]) Inv(x *polynomialMod[K]) *polynomialMod[K] {
+	g, u, _, _, _ := gcd(x.p, x.mod)
+	one := ca.NewPolynomial(x.p.Field(), x.p.Order(), ca.PolynomialTerm[K]{Coefficient: x.p.Field().NewOne()})
+	if !g.Equal(one) {
+		panic("inverse does not exist")
+	}
+	z.mod.Set(x.mod)
+	z.p.Set(u)
+	return z
+}
+
+func (x *polynomialMod[K]) String() string {
+	return fmt.Sprintf("%s/%s", x.p, x.mod)
+}
+
+func pow[K ca.Group[K]](x K, n *big.Int) K {
 	switch {
-	case n < 0:
-		return exp(x.NewOne().Inv(x), -n)
-	case n == 0:
+	case n.Sign() < 0:
+		return pow(x.NewOne().Inv(x), new(big.Int).Neg(n))
+	case n.Sign() == 0:
 		return x.NewOne()
-	case n%2 == 0:
-		return exp(x.NewOne().Mul(x, x), n/2)
+	case new(big.Int).Rem(n, big.NewInt(2)).Sign() == 0:
+		return pow(x.NewOne().Mul(x, x), new(big.Int).Div(n, big.NewInt(2)))
 	default:
-		return x.NewOne().Mul(x, exp(x.NewOne().Mul(x, x), (n-1)/2))
+		half := new(big.Int).Div(new(big.Int).Sub(n, big.NewInt(1)), big.NewInt(2))
+		return x.NewOne().Mul(x, pow(x.NewOne().Mul(x, x), half))
 	}
 }
 

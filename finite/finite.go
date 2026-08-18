@@ -66,8 +66,12 @@ func (x *prime) String() string {
 	return x.i.String()
 }
 
-func (x *prime) characteristic() int {
-	return int(x.order.Int64())
+func (x *prime) characteristic() *big.Int {
+	return big.NewInt(0).Set(x.order)
 }
 
-func (x *prime) primePower() int { return 1 }
+func (x *prime) primePower() *big.Int { return big.NewInt(1) }
+
+func (x *prime) ith(i *big.Int) *prime {
+	return &prime{order: new(big.Int).Set(x.order), i: new(big.Int).Set(i)}
+}

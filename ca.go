@@ -11,30 +11,33 @@ import (
 	"github.com/jba/omap/ordered"
 )
 
+type Group[T any] interface {
+	// NewOne returns the multiplicative identity of the field.
+	NewOne() T
+	// Equal reports whether x and y are equal, where x is the method receiver.
+	Equal(y T) bool
+	// Mul sets z to the product x*y and returns z, where z is the method receiver.
+	Mul(x, y T) T
+	// Inv sets z to 1/x and returns z, where z is the method receiver.
+	Inv(x T) T
+	// String returns the string representation.
+	String() string
+}
+
 // A Field is an element whose addition and multiplication operations satisfy the [field] axioms.
 //
 // [field]: https://en.wikipedia.org/wiki/Field_(mathematics)
 type Field[T any] interface {
 	// NewZero returns the additive identity of the field.
 	NewZero() T
-	// NewOne returns the multiplicative identity of the field.
-	NewOne() T
-
-	// Equal reports whether x and y are equal, where x is the method receiver.
-	Equal(y T) bool
 	// Add sets z to the sum x+y and returns z, where z is the method receiver.
 	Add(x, y T) T
 	// Sub sets z to the difference x-y and returns z, where z is the method receiver.
 	Sub(x, y T) T
-	// Mul sets z to the product x*y and returns z, where z is the method receiver.
-	Mul(x, y T) T
+	// Group provides the multiplication operation.
+	Group[T]
 	// Div sets z to the quotient x/y and returns z, where z is the method receiver.
 	Div(x, y T) T
-	// Inv sets z to 1/x and returns z, where z is the method receiver.
-	Inv(x T) T
-
-	// String returns the string representation.
-	String() string
 }
 
 // A Rat represents a quotient of arbitrary precision.
@@ -76,6 +79,12 @@ func (x *Rat) Equal(y *Rat) bool {
 // String returns a string representation of x in the form "a/b" if b != 1, and in the form "a" if b == 1.
 func (x *Rat) String() string {
 	return x.RatString()
+}
+
+// SetFrac sets z to a/b and returns z.
+func (z *Rat) SetFrac(a, b *big.Int) *Rat {
+	z.Rat.SetFrac(a, b)
+	return z
 }
 
 // A [Monomial] is a product of variables chained by multiplication.
